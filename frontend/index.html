@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuMind SaaS - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+    .dropzone-active { 
+        background-color: #ebf8ff; /* Equivalente ao bg-blue-100 */
+        border-color: #2563eb; 
+    }
+</style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <div class="container mx-auto py-10 px-4">
+        <h1 class="text-3xl font-bold text-blue-700 mb-8 text-center">DocuMind SaaS</h1>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Enviar Documentos (PDF)</h2>
+            
+            <div id="dropzone" class="border-2 border-dashed border-blue-400 p-10 text-center rounded-lg cursor-pointer hover:bg-blue-50 transition-all">
+                <p class="text-gray-600" id="dropzoneText">Arraste seus PDFs aqui ou clique para selecionar</p>
+                <input type="file" id="fileInput" class="hidden" multiple accept=".pdf">
+            </div>
+
+            <div id="loadingArea" class="hidden mt-6">
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="loadingStatus" class="text-sm text-gray-600 mt-2 text-center font-medium">Processando...</p>
+            </div>
+
+            <button id="uploadBtn" class="mt-6 bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 w-full font-bold shadow-lg transition-all">
+                Processar Arquivos
+            </button>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                <h2 class="text-xl font-semibold text-gray-700">Histórico de Extração</h2>
+                <a href="http://127.0.0.1:8000/download-excel" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 font-bold transition-all">
+                    Baixar Excel Completo
+                </a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-100 border-b">
+                        <tr>
+                            <th class="p-4 text-gray-600 font-bold uppercase text-xs">Arquivo</th>
+                            <th class="p-4 text-gray-600 font-bold uppercase text-xs">CNPJ</th>
+                            <th class="p-4 text-gray-600 font-bold uppercase text-xs">Valor</th>
+                            <th class="p-4 text-gray-600 font-bold uppercase text-xs">Contato</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultTable">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const dropzone = document.getElementById('dropzone');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const resultTable = document.getElementById('resultTable');
+        const loadingArea = document.getElementById('loadingArea');
+        const progressBar = document.getElementById('progressBar');
+        const loadingStatus = document.getElementById('loadingStatus');
+
+        // Abre seleção de arquivo ao clicar no dropzone
+        dropzone.onclick = () => fileInput.click();
+
+        // Muda texto quando arquivos são selecionados
+        fileInput.onchange = () => {
+            const qtd = fileInput.files.length;
+            document.getElementById('dropzoneText').innerText = qtd > 0 ? `${qtd} arquivo(s) selecionado(s)` : "Arraste seus PDFs aqui";
+        };
+
+        uploadBtn.onclick = async () => {
+    // 1. Transforma o FileList em um Array real (isso resolve o problema de referência)
+    const files = Array.from(fileInput.files);
+    
+    if (files.length === 0) return alert("Selecione ao menos um arquivo!");
+
+    // Feedback visual
+    uploadBtn.disabled = true;
+    uploadBtn.innerText = "Trabalhando...";
+    loadingArea.classList.remove('hidden');
+    
+    let processados = 0;
+
+    // 2. Loop assíncrono rigoroso
+    for (const file of files) {
+        console.log("Iniciando processo do arquivo:", file.name);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            loadingStatus.innerText = `Processando: ${file.name}...`;
+            
+            const response = await fetch('http://127.0.0.1:8000/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                console.error("Erro no servidor para o arquivo:", file.name);
+                continue; // Pula para o próximo se este der erro
+            }
+
+            const data = await response.json();
+            console.log("Resposta recebida para:", file.name, data);
+            
+            if (data.dados_extraidos) {
+                adicionarLinha(data.dados_extraidos, file.name);
+            }
+
+            // Atualiza progresso
+            processados++;
+            const percentual = (processados / files.length) * 100;
+            progressBar.style.width = percentual + '%';
+            loadingStatus.innerText = `Concluído ${processados} de ${files.length}`;
+
+            // 3. Pequena pausa de 300ms para o SQLite "respirar" entre gravações
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+        } catch (error) {
+            console.error("Erro fatal no loop:", error);
+        }
+    }
+
+    // Finalização
+    setTimeout(() => {
+        uploadBtn.disabled = false;
+        uploadBtn.innerText = "Processar Arquivos";
+        loadingArea.classList.add('hidden');
+        progressBar.style.width = '0%';
+        fileInput.value = ""; // Limpa os arquivos para permitir novo upload
+        alert("Processamento finalizado!");
+    }, 1000);
+};
+
+        function adicionarLinha(dados, nomeArquivo) {
+            const row = document.createElement('tr');
+            row.className = "border-b hover:bg-gray-50 transition-colors animate-pulse";
+            
+            // Formata o valor se ele for numérico
+            const valorFormatado = dados.valor !== "Não encontrado" ? `R$ ${dados.valor}` : "N/A";
+
+            row.innerHTML = `
+                <td class="p-4 text-sm font-medium text-gray-800">${nomeArquivo}</td>
+                <td class="p-4 text-sm text-gray-600">${dados.cnpj || '---'}</td>
+                <td class="p-4 text-sm text-blue-700 font-bold">${valorFormatado}</td>
+                <td class="p-4 text-xs text-gray-500">
+                    <span class="font-semibold">${dados.email || ''}</span><br>
+                    <span>${dados.telefone || ''}</span>
+                </td>
+            `;
+            // Remove a animação de pulso após 1 segundo
+            setTimeout(() => row.classList.remove('animate-pulse'), 1000);
+            
+            // Insere no início da tabela
+            resultTable.insertBefore(row, resultTable.firstChild);
+        }
+    </script>
+</body>
+</html>
