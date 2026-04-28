@@ -1,11 +1,12 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+import sqlite3
 import os
+import io
 import shutil
 import pandas as pd
 from uuid import uuid4
-
 from app.processors.pdf_engine import extrair_dados_do_pdf
 from app.database import iniciar_db, salvar_extracao, listar_todos # Importa o banco
 from app.processors.pdf_engine import extrair_dados_do_pdf # Importando o seu motor de extração
@@ -77,6 +78,52 @@ async def download_excel():
     df.to_excel(excel_path, index=False)
     
     return FileResponse(path=excel_path, filename="historico_extracao.xlsx")
+
+@app.get("/historico")
+async def buscar_historico():
+    # Usa a função que você já tem no database.py
+    linhas = listar_todos() 
+    
+    historico = []
+    for linha in linhas:
+        historico.append({
+            "arquivo": linha[0],
+            "cnpj": linha[1],
+            "valor": linha[3],  # No seu SELECT, valor é o índice 3
+            "email": linha[5],  # Email é o índice 5
+            "telefone": linha[4] # Telefone é o índice 4
+        })
+    
+    return historico
+
+@app.get("/historico/exportar")
+async def exportar_excel():
+    conn = sqlite3.connect('storage/documind.db')
+    # Lembre-se: o nome da tabela no seu banco é 'documentos'
+    query = "SELECT nome_arquivo, cnpj, data, valor, telefone, email FROM documentos"
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Extrações')
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={"Content-Disposition": "attachment; filename=historico_documind.xlsx"}
+    )
+
+@app.delete("/historico/limpar")
+async def limpar_historico():
+    conn = sqlite3.connect('storage/documind.db')
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM documentos")
+    conn.commit()
+    conn.close()
+    return {"message": "Histórico limpo"}
 
 if __name__ == "__main__":
     import uvicorn
