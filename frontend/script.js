@@ -140,3 +140,24 @@ exportBtn.onclick = () => {
     // O navegador inicia o download automaticamente ao abrir este link
     window.location.href = 'http://127.0.0.1:8000/historico/exportar';
 };
+
+const searchInput = document.getElementById('searchInput');
+
+searchInput.oninput = () => {
+    const searchTerm = searchInput.value.toLowerCase();
+    const rows = resultTable.getElementsByTagName('tr');
+
+    // Ignora se for o estado vazio
+    if (document.getElementById('emptyState')) return;
+
+    for (let i = 0; i < rows.length; i++) {
+        const rowText = rows[i].innerText.toLowerCase();
+        
+        // Se o termo de busca estiver em algum lugar da linha, mostra. Se não, esconde.
+        if (rowText.includes(searchTerm)) {
+            rows[i].style.display = "";
+        } else {
+            rows[i].style.display = "none";
+        }
+    }
+};
