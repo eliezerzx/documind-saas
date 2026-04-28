@@ -10,7 +10,41 @@ from uuid import uuid4
 from app.processors.pdf_engine import extrair_dados_do_pdf
 from app.database import iniciar_db, salvar_extracao, listar_todos # Importa o banco
 from app.processors.pdf_engine import extrair_dados_do_pdf # Importando o seu motor de extração
- 
+from datetime import datetime, timedelta
+from typing import Optional
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from pydantic import BaseModel
+
+# Configurações de Segurança
+SECRET_KEY = "sua_chave_secreta_super_segura" # Mude isso em produção!
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Função para criar a tabela de usuários (se ainda não existir)
+def criar_tabela_usuarios():
+    conn = sqlite3.connect('storage/documind.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            senha_hash TEXT NOT NULL,
+            nome TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Modelos de dados para o formulário
+class LoginData(BaseModel):
+    email: str
+    senha: str
+
+criar_tabela_usuarios()
+
 # Adicione este print para ter certeza que o código passou por aqui
 print("Iniciando banco de dados...")
 iniciar_db()
@@ -29,6 +63,33 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STORAGE_DIR = os.path.join(os.path.dirname(BASE_DIR), "storage", "uploads")
 os.makedirs(STORAGE_DIR, exist_ok=True)
+
+@app.post("/auth/registrar")
+async def registrar(user: LoginData):
+    hashed_password = pwd_context.hash(user.senha)
+    try:
+        conn = sqlite3.connect('storage/documind.db')
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO usuarios (email, senha_hash) VALUES (?, ?)", (user.email, hashed_password))
+        conn.commit()
+        conn.close()
+        return {"message": "Usuário criado com sucesso!"}
+    except:
+        return {"error": "E-mail já cadastrado"}
+
+@app.post("/auth/login")
+async def login(user: LoginData):
+    conn = sqlite3.connect('storage/documind.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT senha_hash FROM usuarios WHERE email = ?", (user.email,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if not result or not pwd_context.verify(user.senha, result[0]):
+        return {"error": "E-mail ou senha incorretos"}
+    
+    # Se chegou aqui, o login é válido
+    return {"message": "Login realizado!", "redirect": "/index.html"}
 
 @app.get("/")
 def home():
@@ -124,6 +185,7 @@ async def limpar_historico():
     conn.commit()
     conn.close()
     return {"message": "Histórico limpo"}
+
 
 if __name__ == "__main__":
     import uvicorn
