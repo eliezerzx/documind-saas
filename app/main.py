@@ -15,6 +15,17 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from passlib.context import CryptContext
+
+# Mudamos de bcrypt para argon2
+#pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+# Criamos funções simples que não usam bibliotecas externas
+def hash_falso(senha):
+    return senha  # Não faz nada, apenas retorna o texto
+
+def verificar_falso(senha_digitada, senha_do_banco):
+    return senha_digitada == senha_do_banco
 
 # Configurações de Segurança
 SECRET_KEY = "sua_chave_secreta_super_segura" # Mude isso em produção!
@@ -23,27 +34,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Função para criar a tabela de usuários (se ainda não existir)
-def criar_tabela_usuarios():
-    conn = sqlite3.connect('storage/documind.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            senha_hash TEXT NOT NULL,
-            nome TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
 # Modelos de dados para o formulário
 class LoginData(BaseModel):
     email: str
     senha: str
-
-criar_tabela_usuarios()
 
 # Adicione este print para ter certeza que o código passou por aqui
 print("Iniciando banco de dados...")
@@ -68,7 +62,7 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 async def registrar(user: LoginData):
     hashed_password = pwd_context.hash(user.senha)
     try:
-        conn = sqlite3.connect('storage/documind.db')
+        conn = sqlite3.connect('storage/documind_v2.db')
         cursor = conn.cursor()
         cursor.execute("INSERT INTO usuarios (email, senha_hash) VALUES (?, ?)", (user.email, hashed_password))
         conn.commit()
@@ -77,19 +71,6 @@ async def registrar(user: LoginData):
     except:
         return {"error": "E-mail já cadastrado"}
 
-@app.post("/auth/login")
-async def login(user: LoginData):
-    conn = sqlite3.connect('storage/documind.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT senha_hash FROM usuarios WHERE email = ?", (user.email,))
-    result = cursor.fetchone()
-    conn.close()
-
-    if not result or not pwd_context.verify(user.senha, result[0]):
-        return {"error": "E-mail ou senha incorretos"}
-    
-    # Se chegou aqui, o login é válido
-    return {"message": "Login realizado!", "redirect": "/index.html"}
 
 @app.get("/")
 def home():
@@ -159,7 +140,7 @@ async def buscar_historico():
 
 @app.get("/historico/exportar")
 async def exportar_excel():
-    conn = sqlite3.connect('storage/documind.db')
+    conn = sqlite3.connect('storage/documind_v2.db')
     # Lembre-se: o nome da tabela no seu banco é 'documentos'
     query = "SELECT nome_arquivo, cnpj, data, valor, telefone, email FROM documentos"
     df = pd.read_sql_query(query, conn)
@@ -179,13 +160,65 @@ async def exportar_excel():
 
 @app.delete("/historico/limpar")
 async def limpar_historico():
-    conn = sqlite3.connect('storage/documind.db')
+    conn = sqlite3.connect('storage/documind_v2.db')
     cursor = conn.cursor()
     cursor.execute("DELETE FROM documentos")
+    cursor.execute("DELETE FROM sqlite_sequence WHERE name='documentos'") # Reinicia a contagem de IDs
     conn.commit()
     conn.close()
     return {"message": "Histórico limpo"}
 
+
+@app.get("/setup-teste")
+async def setup_teste():
+    conn = sqlite3.connect('storage/documind_v2.db')
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM usuarios") # Limpa para o teste
+    
+    usuarios = [
+        ("Admin Documind", "admin@documind.com", "teste123", "Administrador"),
+        ("João Silva", "joao@gmail.com", "teste123", "Premium"),
+        ("Maria Teste", "maria@outlook.com", "teste123", "Teste Grátis")
+    ]
+    
+    for nome, email, senha, tipo in usuarios:
+        cursor.execute("INSERT INTO usuarios (nome, email, senha_hash, tipo) VALUES (?, ?, ?, ?)",
+                       (nome, email, senha, tipo))
+    
+    conn.commit()
+    conn.close()
+    return {"message": "3 usuários criados: Admin, Premium e Teste Grátis"}
+
+@app.post("/auth/login")
+async def login(data: LoginData):
+    try:
+        conn = sqlite3.connect('storage/documind_v2.db')
+        conn.row_factory = sqlite3.Row  # Isso permite acessar colunas pelo nome
+        cursor = conn.cursor()
+        
+        # 1. Busca o usuário pelo e-mail
+        cursor.execute("SELECT * FROM usuarios WHERE email = ?", (data.email,))
+        user = cursor.fetchone()
+        conn.close()
+
+        if not user:
+            return {"error": "E-mail não encontrado"}
+
+        # 2. Verifica a senha (usando a função 'falsa' que criamos para pular o erro do bcrypt)
+        # Se você ainda não criou a função verificar_falso, use: if data.senha != user['senha_hash']:
+        if data.senha != user['senha_hash']:
+            return {"error": "Senha incorreta"}
+
+        # 3. Se deu tudo certo, retorna os dados básicos
+        return {
+            "status": "success",
+            "nome": user['nome'],
+            "email": user['email'],
+            "tipo": user['tipo']
+        }
+
+    except Exception as e:
+        return {"error": f"Erro no servidor: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn

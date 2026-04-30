@@ -1,45 +1,89 @@
-/* Sidebar Nav Items */
+/* --- ALINHAMENTO DA SIDEBAR (Correção definitiva) --- */
 .nav-item {
-    display: flex;
-    align-items: center; /* Alinha o ícone e o texto verticalmente no centro */
-    gap: 12px;           /* Espaço exato entre o ícone e o texto */
-    padding: 10px 12px;  /* Respiro interno do item */
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 10px 16px;
     border-radius: 8px;
-    font-weight: 500;
+    color: #64748b;
+    text-decoration: none;
     font-size: 14px;
-    transition: all 0.2s ease;
-    @apply text-slate-500 dark:text-slate-400; /* Cores usando Tailwind */
+    font-weight: 500;
+    transition: all 0.2s;
+    width: 100%;
 }
 
-.nav-item i, .nav-item svg {
-    display: block;      /* Garante que o ícone se comporte como bloco no flex */
+.nav-item i {
+    width: 18px !important;
+    height: 18px !important;
+    flex-shrink: 0;
 }
 
 .nav-item.active {
-    @apply bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400;
+    background-color: #eff6ff !important;
+    color: #2563eb !important;
 }
 
-.nav-item:hover:not(.active) {
-    @apply bg-slate-100 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100;
+/* --- BOTÃO DE SAIR --- */
+.btn-logout-sidebar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    background-color: #fef2f2;
+    color: #dc2626;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: 0.3s;
+    border: 1px solid transparent;
+    cursor: pointer;
 }
 
+.btn-logout-sidebar:hover {
+    background-color: #dc2626;
+    color: white;
+}
 
+/* MODO ESCURO */
+.dark .nav-item { color: #94a3b8; }
+.dark .nav-item.active { background-color: rgba(37, 99, 235, 0.15) !important; color: #60a5fa !important; }
+.dark .btn-logout-sidebar { background-color: rgba(220, 38, 38, 0.1); color: #f87171; }
 
-/* Animations for Toasts */
+/* TOASTS E SCROLLBAR */
 .toast-entry { animation: slideIn 0.3s ease-out forwards; }
 .toast-exit { animation: slideOut 0.3s ease-in forwards; }
-
-@keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes slideOut {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(100%); opacity: 0; }
-}
-
-/* Scrollbar Custom */
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 .dark ::-webkit-scrollbar-thumb { background: #334155; }
+
+/* Ajuste para o cabeçalho do Histórico */
+@media (max-width: 640px) {
+    .p-4.border-b.flex {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .flex-1.max-w-md {
+        max-width: 100%;
+        width: 100%;
+    }
+}
+
+/* Garante que o input de busca não "esmage" os botões */
+#searchInput {
+    min-width: 120px;
+}
+
+/* Garante que a tabela tenha um respiro com as novas colunas */
+table {
+    min-width: 800px; /* Evita que as colunas fiquem muito juntas em telas médias */
+}
+
+#resultTable td {
+    white-space: nowrap; /* Evita que o texto quebre linha e bagunce o alinhamento */
+}
