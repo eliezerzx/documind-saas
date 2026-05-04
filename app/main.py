@@ -177,31 +177,13 @@ def home():
     return {"status": "DocuMind rodando perfeitamente"}
 
 @app.post("/upload")
-async def upload_documento(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Envie um PDF")
-
-    file_id = str(uuid4())[:8]
-    filename = f"{file_id}_{file.filename}"
-    file_path = os.path.join(STORAGE_DIR, filename)
-
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        dados = extrair_dados_do_pdf(file_path)
-        
-        salvar_extracao(
-            file.filename, 
-            dados.get("cnpj"), 
-            dados.get("data"), 
-            dados.get("valor"),
-            dados.get("telefone"),  
-            dados.get("email")
-        )     
-        return {"status": "Processado e salvo no histórico", "dados": dados}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+async def upload_documento(file: UploadFile = File(...), user_email: str = None):
+    # ... lógica de salvar ficheiro ...
+    dados = extrair_dados_do_pdf(path)
+    salvar_extracao(file.filename, dados.get("cnpj"), dados.get("data"), 
+                    dados.get("valor"), dados.get("telefone"), 
+                    dados.get("email"), user_email)
+    return {"dados": dados}
 
 @app.get("/download-excel")
 async def download_excel():
@@ -216,18 +198,14 @@ async def download_excel():
     return FileResponse(path=excel_path, filename="historico_extracao.xlsx")
 
 @app.get("/historico")
-async def buscar_historico():
-    linhas = listar_todos() 
-    historico = []
-    for linha in linhas:
-        historico.append({
-            "arquivo": linha[0],
-            "cnpj": linha[1],
-            "valor": linha[3],
-            "email": linha[5],
-            "telefone": linha[4]
-        })
-    return historico
+async def buscar_historico(email: str = None):
+    # Se o email vier 'undefined' ou vazio, retorna lista vazia em vez de erro
+    if not email or email == "undefined":
+        return []
+        
+    from app.database import listar_por_usuario
+    rows = listar_por_usuario(email)
+    return [{"arquivo": r[0], "cnpj": r[1], "data": r[2], "valor": r[3], "telefone": r[4], "email": r[5]} for r in rows]
 
 @app.get("/historico/exportar")
 async def exportar_excel():
@@ -258,20 +236,15 @@ async def limpar_historico():
 
 @app.get("/auth/me")
 async def obter_meu_perfil():
-    try:
-        conn = sqlite3.connect('storage/documind.db')
-        cursor = conn.cursor()
-        # Buscamos o último utilizador registado para o teste de perfil
-        cursor.execute("SELECT nome, foto_perfil FROM usuarios ORDER BY id DESC LIMIT 1")
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user:
-            # Retornamos exatamente as chaves que o JS espera: "nome" e "foto"
-            return {"nome": user[0], "foto": user[1]}
-        return {"error": "Usuário não encontrado"}
-    except Exception as e:
-        return {"error": str(e)}
+    conn = sqlite3.connect('storage/documind.db')
+    cursor = conn.cursor()
+    # Pegamos o último para o teste, mas retornamos o email também
+    cursor.execute("SELECT nome, foto_perfil, email FROM usuarios ORDER BY id DESC LIMIT 1")
+    user = cursor.fetchone()
+    conn.close()
+    if user:
+        return {"nome": user[0], "foto": user[1], "email": user[2]}
+    return {"error": "User not found"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -61,10 +61,17 @@ window.onload = async () => {
     } catch (e) { showToast("Erro ao carregar histórico", "error"); }
 };
 
-// --- UPLOAD COM PROGRESSO ---
-uploadBtn.onclick = async () => {
+// --- UPLOAD COM PROGRESSO E VÍNCULO DE USUÁRIO ---
+uploadBtn.onclick = async (e) => {
+    if (e) e.preventDefault(); // <--- ISTO PARA O RECARREGAMENTO DA PÁGINA
+
     const files = Array.from(fileInput.files);
     if (!files.length) return showToast("Selecione arquivos PDF", "error");
+
+    // Bloqueia o upload se o e-mail ainda não tiver sido carregado
+    if (!LOGGED_USER_EMAIL) {
+        return showToast("Aguarde o carregamento do perfil...", "error");
+    }
 
     document.getElementById('emptyState')?.remove();
     uploadBtn.disabled = true;
@@ -72,32 +79,50 @@ uploadBtn.onclick = async () => {
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const percent = Math.round(((i + 1) / files.length) * 100);
-        
-        // Atualiza UI da barra
-        progressBar.style.width = `${percent}%`;
-        progressPercent.innerText = `${percent}%`;
-        progressText.innerText = `Processando: ${file.name}`;
-
         const formData = new FormData();
         formData.append('file', file);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/upload', { method: 'POST', body: formData });
+            // Enviamos o e-mail na URL para o vínculo
+            const res = await fetch(`http://127.0.0.1:8000/upload?user_email=${LOGGED_USER_EMAIL}`, { 
+                method: 'POST', 
+                body: formData 
+            });
+
             if (res.ok) {
                 const data = await res.json();
-                adicionarLinhaTabela(data.dados_extraidos, file.name);
-                showToast(`${file.name} extraído!`, "success");
+                // Adiciona a linha na tabela instantaneamente
+                adicionarLinhaTabela(data.dados, file.name); 
+                showToast(`${file.name} processado!`, "success");
             }
-        } catch (e) { showToast(`Erro no arquivo ${file.name}`, "error"); }
+        } catch (error) {
+            showToast(`Erro no ficheiro ${file.name}`, "error");
+        }
     }
+
+    // Reset sem dar refresh
+    setTimeout(() => {
+        progressContainer.classList.add('hidden');
+        uploadBtn.disabled = false;
+        fileInput.value = "";
+    }, 2000);
+};
+
+    // Reset da barra após concluir tudo
+    setTimeout(() => {
+        progressContainer.classList.add('hidden');
+        uploadBtn.disabled = false;
+        fileInput.value = ""; // Limpa a seleção
+        dropzone.classList.remove('border-blue-500', 'bg-blue-50');
+    }, 2000);
+
 
     setTimeout(() => {
         progressContainer.classList.add('hidden');
         uploadBtn.disabled = false;
         lucide.createIcons();
     }, 1000);
-};
+
 
 // --- LIMPAR TUDO ---
 clearBtn.onclick = async () => {
@@ -185,80 +210,45 @@ searchInput.oninput = () => {
 };
 
 // --- INICIALIZAÇÃO UNIFICADA ---
+let LOGGED_USER_EMAIL = "";
+
 window.onload = async function() {
+    // 1. Lógica do Token (Mantenha igual)
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
-
-    // 1. Processar Token da URL
     if (token) {
         localStorage.setItem('documind_token', token);
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    // 2. Verificar Sessão
-    const session = localStorage.getItem('documind_token');
-    if (!session && window.location.pathname.includes('index.html')) {
-        window.location.href = "login.html";
-        return; // Para a execução aqui
-    }
-
-    // 3. Carregar Perfil e Histórico (Chamadas ao Backend)
+    // 2. IMPORTANTE: Primeiro carregamos o perfil, depois o histórico
+    // Usamos 'await' para garantir que temos o e-mail antes de qualquer outra coisa
     await carregarPerfilUsuario();
-    await carregarHistoricoInicial();
     
-    // 4. Ajuste de ícones
-    if (document.documentElement.classList.contains('dark')) {
-        const themeIcon = document.getElementById('theme-icon');
-        if(themeIcon) themeIcon.setAttribute('data-lucide', 'sun');
-    }
     lucide.createIcons();
 };
 
 async function carregarPerfilUsuario() {
     try {
-        // Importante: Manter a porta 8000 que é a do Python
-        const response = await fetch('http://127.0.0.1:8000/auth/me');
-        if (!response.ok) throw new Error("Erro na rota /auth/me");
-        
+        const response = await fetch('http://localhost:8000/auth/me');
         const dados = await response.json();
 
-        if (dados.nome) {
-            // Atualiza o Nome
-            const nomeElemento = document.getElementById('user-name');
-            if(nomeElemento) nomeElemento.innerText = dados.nome;
-            
-            // Atualiza a Foto
-            const fotoElemento = document.getElementById('user-photo');
-            if (fotoElemento && dados.foto) {
-                fotoElemento.src = dados.foto;
-                fotoElemento.style.display = 'block';
-                // Remove o ícone de erro se a foto carregar
-                fotoElemento.onerror = () => { fotoElemento.src = "https://ui-avatars.com/api/?name=" + dados.nome; };
-            }
-            
-            // Mostra o bloco de perfil
-            const profileBox = document.getElementById('user-profile');
-            if(profileBox) profileBox.style.display = 'flex';
+        if (dados.email) {
+            LOGGED_USER_EMAIL = dados.email;
+            document.getElementById('user-name').innerText = dados.nome;
+            if (dados.foto) document.getElementById('user-photo').src = dados.foto;
+            document.getElementById('user-profile').style.display = 'flex';
+
+            // Só chamamos o histórico quando temos o e-mail confirmado
+            carregarHistorico(dados.email);
         }
-    } catch (erro) {
-        console.error("Erro ao carregar perfil:", erro);
-    }
+    } catch (e) { console.error("Erro ao carregar perfil:", e); }
 }
 
-async function carregarHistoricoInicial() {
-    try {
-        const res = await fetch('http://127.0.0.1:8000/historico');
-        if (res.ok) {
-            const dados = await res.json();
-            if (dados.length > 0) {
-                const emptyState = document.getElementById('emptyState');
-                if(emptyState) emptyState.remove();
-                dados.forEach(item => adicionarLinhaTabela(item, item.arquivo));
-            }
-        }
-    } catch (e) { 
-        console.error("Erro ao carregar histórico", e);
-    }
+async function carregarHistorico(email) {
+    const res = await fetch(`http://127.0.0.1:8000/historico?email=${email}`);
+    const dados = await res.json();
+    // Aqui você chama sua lógica de adicionarLinhaTabela para cada dado
 }
 
 function logout() {

@@ -28,7 +28,8 @@ def iniciar_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER, -- Para saber de quem é o documento
+            usuario_id INTEGER, 
+            usuario_email TEXT, -- COLUNA PARA O VÍNCULO
             nome_arquivo TEXT,
             cnpj TEXT,
             data TEXT,
@@ -40,29 +41,39 @@ def iniciar_db():
         )
     ''')
     
-    # Garante que as colunas novas existam caso o banco seja antigo
+    # Migração: Caso o banco já exista, adiciona a coluna sem erro
     try:
-        cursor.execute('ALTER TABLE documentos ADD COLUMN telefone TEXT')
-    except:
-        pass
-    try:
-        cursor.execute('ALTER TABLE documentos ADD COLUMN email TEXT')
+        cursor.execute('ALTER TABLE documentos ADD COLUMN usuario_email TEXT')
     except:
         pass
         
     conn.commit()
     conn.close()
 
-def salvar_extracao(nome, cnpj, data, valor, telefone, email):
-    """Salva os dados extraídos no banco de dados."""
+def salvar_extracao(nome, cnpj, data, valor, telefone, email, usuario_email):
+    """Salva os dados extraídos vinculando ao e-mail do usuário."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO documentos (nome_arquivo, cnpj, data, valor, telefone, email)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (nome, cnpj, data, valor, telefone, email))
+        INSERT INTO documentos (nome_arquivo, cnpj, data, valor, telefone, email, usuario_email)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (nome, cnpj, data, valor, telefone, email, usuario_email))
     conn.commit()
     conn.close()
+
+def listar_por_usuario(email):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # Importante: O SELECT deve bater com a ordem que o main.py espera
+    cursor.execute('''
+        SELECT nome_arquivo, cnpj, data, valor, telefone, email 
+        FROM documentos 
+        WHERE usuario_email = ? 
+        ORDER BY data_processamento DESC
+    ''', (email,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 def listar_todos():
     """Retorna todos os registros para o histórico, do mais recente para o mais antigo."""
