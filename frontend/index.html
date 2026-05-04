@@ -66,10 +66,18 @@
         </div>
 
         <div class="border-t border-slate-100 dark:border-slate-700 pt-4 px-2 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold">EC</div>
-            <div class="text-xs">
-                <p class="font-bold">Eliezer Carvalho</p>
-                <p class="text-slate-500 dark:text-slate-400">Administrador</p>
+            <div id="user-profile" style="display: none; align-items: center; gap: 12px; padding: 10px;">
+                <!-- Foto à Esquerda -->
+                <img id="user-photo" src="" alt="Foto" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0;">
+                
+                <!-- Container para Nome e Cargo (Empilhados) -->
+                <div style="display: flex; flex-direction: column; justify-content: center;">
+                    <span id="user-name" style="font-weight: 600; font-size: 14px; color: #1e293b; line-height: 1.2;">Carregando...</span>
+                    <span style="font-size: 12px; color: #64748b;">Administrador</span>
+                </div>
+
+                <!-- Botão Sair (Opcional: você pode colocar um ícone ou deixar ao lado) -->
+                <button onclick="logout()" style="margin-left: 10px; background: #fee2e2; color: #ef4444; border: none; padding: 4px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: bold;">Sair</button>
             </div>
         </div>
     </aside>

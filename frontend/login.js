@@ -21,3 +21,13 @@ loginForm.onsubmit = async (e) => {
         window.location.href = 'index.html'; 
     }
 };
+
+// Esta função deve ser chamada assim que a página carrega
+function verificarRetornoGoogle() {
+    // Verifica se o URL contém dados de login (caso o backend redirecione com params)
+    // Mas no seu caso, o backend está a entregar o JSON direto no ecrã.
+    // O ideal é o backend redirecionar de volta para o seu site.
+}
+
+// Para um fluxo profissional, vamos ajustar o seu backend para redirecionar 
+// em vez de apenas mostrar o texto na tela.

@@ -10,6 +10,28 @@ const progressBar = document.getElementById('progress-bar');
 const progressPercent = document.getElementById('progress-percent');
 const progressText = document.getElementById('progress-text');
 
+window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    if (token) {
+        // Guarda o token no navegador para o usuário não ter que logar toda hora
+        localStorage.setItem('documind_token', token);
+        
+        // Limpa a URL para ficar bonita (sem o ?token=...)
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        alert("Login realizado com sucesso!");
+    }
+
+    // Verifica se o usuário está logado
+    const session = localStorage.getItem('documind_token');
+    if (!session && window.location.pathname.includes('index.html')) {
+        // Se tentar acessar o index sem estar logado, volta para o login
+        window.location.href = "login.html";
+    }
+}
+
 // --- TEMA (DARK MODE) ---
 themeToggle.onclick = () => {
     const isDark = document.documentElement.classList.toggle('dark');
@@ -161,3 +183,85 @@ searchInput.oninput = () => {
         }
     }
 };
+
+// --- INICIALIZAÇÃO UNIFICADA ---
+window.onload = async function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    // 1. Processar Token da URL
+    if (token) {
+        localStorage.setItem('documind_token', token);
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // 2. Verificar Sessão
+    const session = localStorage.getItem('documind_token');
+    if (!session && window.location.pathname.includes('index.html')) {
+        window.location.href = "login.html";
+        return; // Para a execução aqui
+    }
+
+    // 3. Carregar Perfil e Histórico (Chamadas ao Backend)
+    await carregarPerfilUsuario();
+    await carregarHistoricoInicial();
+    
+    // 4. Ajuste de ícones
+    if (document.documentElement.classList.contains('dark')) {
+        const themeIcon = document.getElementById('theme-icon');
+        if(themeIcon) themeIcon.setAttribute('data-lucide', 'sun');
+    }
+    lucide.createIcons();
+};
+
+async function carregarPerfilUsuario() {
+    try {
+        // Importante: Manter a porta 8000 que é a do Python
+        const response = await fetch('http://127.0.0.1:8000/auth/me');
+        if (!response.ok) throw new Error("Erro na rota /auth/me");
+        
+        const dados = await response.json();
+
+        if (dados.nome) {
+            // Atualiza o Nome
+            const nomeElemento = document.getElementById('user-name');
+            if(nomeElemento) nomeElemento.innerText = dados.nome;
+            
+            // Atualiza a Foto
+            const fotoElemento = document.getElementById('user-photo');
+            if (fotoElemento && dados.foto) {
+                fotoElemento.src = dados.foto;
+                fotoElemento.style.display = 'block';
+                // Remove o ícone de erro se a foto carregar
+                fotoElemento.onerror = () => { fotoElemento.src = "https://ui-avatars.com/api/?name=" + dados.nome; };
+            }
+            
+            // Mostra o bloco de perfil
+            const profileBox = document.getElementById('user-profile');
+            if(profileBox) profileBox.style.display = 'flex';
+        }
+    } catch (erro) {
+        console.error("Erro ao carregar perfil:", erro);
+    }
+}
+
+async function carregarHistoricoInicial() {
+    try {
+        const res = await fetch('http://127.0.0.1:8000/historico');
+        if (res.ok) {
+            const dados = await res.json();
+            if (dados.length > 0) {
+                const emptyState = document.getElementById('emptyState');
+                if(emptyState) emptyState.remove();
+                dados.forEach(item => adicionarLinhaTabela(item, item.arquivo));
+            }
+        }
+    } catch (e) { 
+        console.error("Erro ao carregar histórico", e);
+    }
+}
+
+function logout() {
+    localStorage.removeItem('documind_token'); // Limpa o token
+    window.location.href = "login.html"; // Volta para o login
+}
